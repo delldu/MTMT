@@ -33,11 +33,14 @@ class DeshadowModel(nn.Module):
 
     def forward(self, x):
         x_size = x.size()[2:]
-        conv2merge = self.base(x)
-        conv2merge = self.convert(conv2merge)
-        up_edge, edge_feature, up_sal, sal_feature, up_subitizing = self.merge1(conv2merge, x_size)
-        up_sal_final = self.merge2(edge_feature, sal_feature, x_size)
-        return up_edge, up_sal, up_subitizing, up_sal_final
+        resnext_feature = self.base(x)
+        resnext_feature = self.convert(resnext_feature)
+        fpn_edge_feature, fpn_shadow_feature = self.merge1(resnext_feature, x_size)
+        fpn_final_score = self.merge2(fpn_edge_feature, fpn_shadow_feature, x_size)
+
+        mask = torch.sigmoid(fpn_final_score[-1])
+
+        return mask
 
 
 class ConvertLayer(nn.Module):
@@ -89,46 +92,34 @@ class ConvertLayer(nn.Module):
             resl.append(self.convert0[i](list_x[i]))
         return resl
 
-
+#DSS merge
 class MergeLayer1(nn.Module):
     def __init__(self):
         super(MergeLayer1, self).__init__()
-        self.list_k = [[32, 0, 32, 3, 1], [64, 0, 64, 3, 1], [64, 0, 64, 5, 2], [64, 0, 64, 5, 2], [64, 0, 64, 7, 3]]
+        list_k = [[32, 0, 32, 3, 1],
+         [64, 0, 64, 3, 1],
+         [64, 0, 64, 5, 2],
+         [64, 0, 64, 5, 2],
+         [64, 0, 64, 7, 3]]
 
         trans, up, DSS = [], [], []
-
-        for i, ik in enumerate(self.list_k):
-            up.append(
-                nn.Sequential(
-                    nn.Conv2d(ik[0], ik[2], ik[3], 1, ik[4]),
-                    nn.BatchNorm2d(ik[2]),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(ik[2], ik[2], ik[3], 1, ik[4]),
-                    nn.BatchNorm2d(ik[2]),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(ik[2], ik[2], ik[3], 1, ik[4]),
-                    nn.BatchNorm2d(ik[2]),
-                    nn.ReLU(inplace=True),
-                )
-            )
-            if i > 0 and i < len(self.list_k) - 1:  # i represent number
-                DSS.append(
-                    nn.Sequential(
-                        nn.Conv2d(ik[0] * (i + 1), ik[0], 1, 1, 1), 
-                        nn.BatchNorm2d(ik[0]), 
-                        nn.ReLU(inplace=True)
-                    )
-                )
+        for i, ik in enumerate(list_k):
+            up.append(nn.Sequential(nn.Conv2d(ik[0], ik[2], ik[3], 1, ik[4]), nn.BatchNorm2d(ik[2]), nn.ReLU(inplace=True),
+                                    nn.Conv2d(ik[2], ik[2], ik[3], 1, ik[4]), nn.BatchNorm2d(ik[2]), nn.ReLU(inplace=True),
+                                    nn.Conv2d(ik[2], ik[2], ik[3], 1, ik[4]), nn.BatchNorm2d(ik[2]), nn.ReLU(inplace=True)))
+            if i > 0 and i < len(list_k)-1: # i represent number
+                DSS.append(nn.Sequential(nn.Conv2d(ik[0]*(i+1), ik[0], 1, 1, 1),
+                           nn.BatchNorm2d(ik[0]), nn.ReLU(inplace=True)))
 
         trans.append(nn.Sequential(nn.Conv2d(64, 32, 1, 1, bias=False), nn.ReLU(inplace=True)))
 
+
         # self.shadow_score = nn.Conv2d(list_k[0][2], 1, 3, 1, 1)
         self.shadow_score = nn.Sequential(
-            nn.Conv2d(self.list_k[1][2], self.list_k[1][2] // 4, 3, 1, 1),
-            nn.BatchNorm2d(self.list_k[1][2] // 4),
+            nn.Conv2d(list_k[1][2], list_k[1][2]//4, 3, 1, 1), 
+            nn.BatchNorm2d(list_k[1][2]//4), 
             nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
-            nn.Conv2d(self.list_k[1][2] // 4, 1, 1),
+            nn.Dropout(0.1), nn.Conv2d(list_k[1][2]//4, 1, 1)
         )
         # Sequential(
         #   (0): Conv2d(64, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
@@ -140,20 +131,12 @@ class MergeLayer1(nn.Module):
 
         # self.edge_score = nn.Conv2d(list_k[0][2], 1, 3, 1, 1)
         self.edge_score = nn.Sequential(
-            nn.Conv2d(self.list_k[0][2], self.list_k[0][2] // 4, 3, 1, 1),
-            nn.BatchNorm2d(self.list_k[0][2] // 4),
+            nn.Conv2d(list_k[0][2], list_k[0][2]//4, 3, 1, 1), 
+            nn.BatchNorm2d(list_k[0][2]//4), 
             nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
-            nn.Conv2d(self.list_k[0][2] // 4, 1, 1),
+            nn.Dropout(0.1), 
+            nn.Conv2d(list_k[0][2]//4, 1, 1)
         )
-        # (Pdb) self.edge_score
-        # Sequential(
-        #   (0): Conv2d(32, 8, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        #   (1): BatchNorm2d(8, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        #   (2): ReLU(inplace=True)
-        #   (3): Dropout(p=0.1, inplace=False)
-        #   (4): Conv2d(8, 1, kernel_size=(1, 1), stride=(1, 1))
-        # )
 
         self.up = nn.ModuleList(up)
         self.relu = nn.ReLU()
@@ -165,68 +148,73 @@ class MergeLayer1(nn.Module):
         #     (1): ReLU(inplace=True)
         #   )
         # )
-
         self.DSS = nn.ModuleList(DSS)
 
         # subitizing section
-        self.number_per_fc = nn.Linear(self.list_k[1][2], 1)  # 64->1
+        self.number_per_fc = nn.Linear(list_k[1][2], 1) #64->1
         # self.number_per_fc -- Linear(in_features=64, out_features=1, bias=True)
 
         torch.nn.init.constant_(self.number_per_fc.weight, 0)
 
-    def forward(self, list_x, x_size: List[int]):
-        pdb.set_trace()
 
-        up_edge, up_sal, edge_feature, sal_feature, U_tmp = [], [], [], [], []
+    def forward(self, list_x: List[torch.Tensor], x_size: List[int]):
+        # list_x -- resnext_feature
+        # (Pdb) len(list_x), list_x[0].size(), list_x[1].size(), list_x[2].size(), list_x[3].size(), list_x[4].size()
+        # (5, [1, 32, 208, 208], [1, 64, 104, 104], [1, 64, 52, 52], [1, 64, 26, 26], [1, 64, 13, 13])
 
-        num_f = len(list_x)
-        tmp = self.up[num_f - 1](list_x[num_f - 1])
-        sal_feature.append(tmp)
-        U_tmp.append(tmp)
-        up_sal.append(F.interpolate(self.shadow_score(tmp), x_size, mode="bilinear", align_corners=True))
-
-        pdb.set_trace()
+        fpn_edge_score, fpn_shadow_score, fpn_edge_feature, fpn_shadow_feature, U_tmp = [], [], [], [], []
 
         # layer5
-        up_tmp_x2 = F.interpolate(U_tmp[0], list_x[3].size()[2:], mode="bilinear", align_corners=True)
-        U_tmp.append(self.DSS[0](torch.cat([up_tmp_x2, list_x[3]], dim=1)))
-        tmp = self.up[3](U_tmp[-1])
-        sal_feature.append(tmp)
-        up_sal.append(F.interpolate(self.shadow_score(tmp), x_size, mode="bilinear", align_corners=True))
+        num_f = len(list_x)
+        tmp = self.up[num_f - 1](list_x[num_f - 1]) # [1, 64, 13, 13]
+        fpn_shadow_feature.append(tmp)
+        U_tmp.append(tmp)
+        # self.shadow_score(tmp).size() -- [1, 1, 13, 13]
+        fpn_shadow_score.append(F.interpolate(self.shadow_score(tmp), x_size, mode='bilinear', align_corners=True))
+
 
         # layer4
-        up_tmp_x2 = F.interpolate(U_tmp[1], list_x[2].size()[2:], mode="bilinear", align_corners=True)
-        up_tmp_x4 = F.interpolate(U_tmp[0], list_x[2].size()[2:], mode="bilinear", align_corners=True)
-        U_tmp.append(self.DSS[1](torch.cat([up_tmp_x4, up_tmp_x2, list_x[2]], dim=1)))
-        tmp = self.up[2](U_tmp[-1])
-        sal_feature.append(tmp)
-        up_sal.append(F.interpolate(self.shadow_score(tmp), x_size, mode="bilinear", align_corners=True))
+        up_tmp_x2 = F.interpolate(U_tmp[0], list_x[3].size()[2:], mode='bilinear', align_corners=True)
+        U_tmp.append(self.DSS[0](torch.cat([up_tmp_x2, list_x[3]], dim=1)))
+        tmp = self.up[3](U_tmp[-1])
+        fpn_shadow_feature.append(tmp)
+        fpn_shadow_score.append(F.interpolate(self.shadow_score(tmp), x_size, mode='bilinear', align_corners=True))
 
         # layer3
-        up_tmp_x2 = F.interpolate(U_tmp[2], list_x[1].size()[2:], mode="bilinear", align_corners=True)
-        up_tmp_x4 = F.interpolate(U_tmp[1], list_x[1].size()[2:], mode="bilinear", align_corners=True)
-        up_tmp_x8 = F.interpolate(U_tmp[0], list_x[1].size()[2:], mode="bilinear", align_corners=True)
+        up_tmp_x2 = F.interpolate(U_tmp[1], list_x[2].size()[2:], mode='bilinear', align_corners=True)
+        up_tmp_x4 = F.interpolate(U_tmp[0], list_x[2].size()[2:], mode='bilinear', align_corners=True)
+        U_tmp.append(self.DSS[1](torch.cat([up_tmp_x4, up_tmp_x2, list_x[2]], dim=1)))
+        tmp = self.up[2](U_tmp[-1])
+        fpn_shadow_feature.append(tmp)
+        fpn_shadow_score.append(F.interpolate(self.shadow_score(tmp), x_size, mode='bilinear', align_corners=True))
+
+        # layer2
+        up_tmp_x2 = F.interpolate(U_tmp[2], list_x[1].size()[2:], mode='bilinear', align_corners=True)
+        up_tmp_x4 = F.interpolate(U_tmp[1], list_x[1].size()[2:], mode='bilinear', align_corners=True)
+        up_tmp_x8 = F.interpolate(U_tmp[0], list_x[1].size()[2:], mode='bilinear', align_corners=True)
         U_tmp.append(self.DSS[2](torch.cat([up_tmp_x8, up_tmp_x4, up_tmp_x2, list_x[1]], dim=1)))
         tmp = self.up[1](U_tmp[-1])
-        sal_feature.append(tmp)
-        up_sal.append(F.interpolate(self.shadow_score(tmp), x_size, mode="bilinear", align_corners=True))
+        fpn_shadow_feature.append(tmp)
+        # fpn_shadow_score.append(F.interpolate(self.shadow_score(tmp), x_size, mode='bilinear', align_corners=True))
 
-        vector = F.adaptive_avg_pool2d(sal_feature[0], output_size=1)
-        vector = vector.view(vector.size(0), -1)
-        up_subitizing = self.number_per_fc(vector)
+        # vector = F.adaptive_avg_pool2d(fpn_shadow_feature[0], output_size=1)
+        # vector = vector.view(vector.size(0), -1)
+        # fc_score = self.number_per_fc(vector)
 
         # edge layer fuse
-        U_tmp = list_x[0] + F.interpolate(
-            (self.trans[-1](sal_feature[0])), list_x[0].size()[2:], mode="bilinear", align_corners=True
-        )
+        U_tmp = list_x[0] + F.interpolate((self.trans[-1](fpn_shadow_feature[0])), list_x[0].size()[2:], mode='bilinear', align_corners=True)
         tmp = self.up[0](U_tmp)
-        edge_feature.append(tmp)
+        fpn_edge_feature = tmp
 
-        up_edge.append(F.interpolate(self.edge_score(tmp), x_size, mode="bilinear", align_corners=True))
+        # fpn_edge_score = F.interpolate(self.edge_score(tmp), x_size, mode='bilinear', align_corners=True)
 
-        pdb.set_trace()
+        # fpn_edge_score.size() -- [1, 1, 416, 416]
+        # fpn_edge_feature.size() -- [1, 32, 208, 208]
+        # len(fpn_shadow_score) -- 4
+        # len(fpn_shadow_feature) -- 4
 
-        return up_edge, edge_feature, up_sal, sal_feature, up_subitizing
+        # return fpn_edge_score, fpn_edge_feature, fpn_shadow_score, fpn_shadow_feature, fc_score
+        return fpn_edge_feature, fpn_shadow_feature
 
 
 class MergeLayer2(nn.Module):
@@ -273,15 +261,15 @@ class MergeLayer2(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, list_x, list_y, x_size):
+        # fpn_edge_feature, fpn_shadow_feature, x_size
         up_score, tmp_feature = [], []
-        list_y = list_y[::-1]
+        list_y = list_y[::-1] # Reverse
 
-        for i, i_x in enumerate(list_x):
-            for j, j_x in enumerate(list_y):
-                tmp = F.interpolate(self.trans[i][j](j_x), i_x.size()[2:], mode="bilinear", align_corners=True) + i_x
-                tmp_f = self.up[i][j](tmp)
-                up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
-                tmp_feature.append(tmp_f)
+        for j, j_x in enumerate(list_y):
+            tmp = F.interpolate(self.trans[0][j](j_x), list_x.size()[2:], mode="bilinear", align_corners=True) + list_x
+            tmp_f = self.up[0][j](tmp)
+            up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
+            tmp_feature.append(tmp_f)
 
         tmp_fea = tmp_feature[0]
         for i_fea in range(len(tmp_feature) - 1):
@@ -342,4 +330,8 @@ def get_model(device):
 
 if __name__ == "__main__":
     model = get_model(torch.device("cpu"))
+    model = model.eval()
+
+    y = model(torch.randn(1, 3, 256, 256))
+    print(y)
     pdb.set_trace()
