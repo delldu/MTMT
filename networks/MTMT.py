@@ -66,8 +66,11 @@ class ConvertLayer(nn.Module):
 
     def forward(self, list_x: List[torch.Tensor]):
         resl = []
-        for i in range(len(list_x)):
-            resl.append(self.convert0[i](list_x[i]))
+        # for i in range(len(list_x)):
+        #     resl.append(self.convert0[i](list_x[i]))
+        for i, m in enumerate(self.convert0):
+            resl.append(m(list_x[i]))
+            
         return resl
 
 class ResidualBlockLayer(nn.Module):

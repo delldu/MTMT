@@ -15,12 +15,12 @@ import torch
 from torch import nn
 from torch.nn import init
 import torch.nn.functional as F
+import todos
 
-from resnext import ResNeXt101
+from .resnext import ResNeXt101
 
 import pdb
 from typing import List
-from typing import Optional
 
 
 class DeshadowModel(nn.Module):
@@ -42,8 +42,7 @@ class DeshadowModel(nn.Module):
         fpn_final_score = self.merge2(fusion_feature, x_size)
 
         mask = torch.sigmoid(fpn_final_score[-1])
-
-        return mask
+        return (mask >= 90 / 255.0).float()
 
 
 class ConvertLayer(nn.Module):
@@ -178,7 +177,10 @@ class MergeLayer1(nn.Module):
         fpn_shadow_score, fpn_shadow_feature, U_tmp = [], [], []
 
         # layer5
-        tmp = self.up[4](list_x[4])  # [1, 64, 13, 13]
+        num_f = len(list_x)
+        tmp = self.up[num_f - 1](list_x[num_f - 1])  # [1, 64, 13, 13]
+
+        # tmp = self.up[4](list_x[4])  # [1, 64, 13, 13]
         fpn_shadow_feature.append(tmp)
         U_tmp.append(tmp)
         # self.shadow_score(tmp).size() -- [1, 1, 13, 13]
@@ -293,13 +295,15 @@ class MergeLayer2(nn.Module):
         #     tmp_feature.append(tmp_f)
 
         for j, m in enumerate(self.trans[0]):
-            tmp = F.interpolate(m(list_y[j]), list_x.size()[2:], mode="bilinear", align_corners=True) + list_x
-            tmp_list.append(tmp)
+            if j < len(list_y):
+                tmp = F.interpolate(m(list_y[j]), list_x.size()[2:], mode="bilinear", align_corners=True) + list_x
+                tmp_list.append(tmp)
 
         for j, m in enumerate(self.up[0]):
-            tmp_f = m(tmp_list[j])
-            up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
-            tmp_feature.append(tmp_f)
+            if j < len(tmp_list):
+                tmp_f = m(tmp_list[j])
+                up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
+                tmp_feature.append(tmp_f)
 
         tmp_fea = tmp_feature[0]
         for i_fea in range(len(tmp_feature) - 1):
@@ -336,7 +340,7 @@ def load_weight(model, path):
             raise KeyError(n)
 
 
-def get_model(device):
+def get_model():
     """Create model."""
 
     model_path = "models/image_deshadow.pth"
@@ -346,22 +350,12 @@ def get_model(device):
     model = DeshadowModel()
 
     load_weight(model, checkpoint)
-    model = model.to(device)
     model.eval()
 
-    model = torch.jit.script(model)
+    # model = torch.jit.script(model)
 
     # todos.data.mkdir("output")
     # if not os.path.exists("output/image_deshadow.torch"):
     #     model.save("output/image_deshadow.torch")
 
     return model
-
-
-if __name__ == "__main__":
-    model = get_model(torch.device("cpu"))
-    model = model.eval()
-
-    with torch.no_grad():
-        y = model(torch.randn(1, 3, 237, 255))
-    print(y.size())

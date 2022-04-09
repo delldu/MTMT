@@ -15,21 +15,30 @@ import os
 import time
 from tqdm import tqdm
 import torch
+import torch.nn.functional as F
 
 import redos
 import todos
 
-from . import shadow
+from . import deshadow
 import pdb
+
+SHADOW_MODEL_HEIGHT = 416
+SHADOW_MODEL_WIDTH = 416
 
 
 def model_forward(model, device, input_tensor):
-    # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
-    if H % COLOR_ZEROPAD_TIMES != 0 or W % COLOR_ZEROPAD_TIMES != 0:
-        input_tensor = todos.data.zeropad_tensor(input_tensor, times=COLOR_ZEROPAD_TIMES)
+    if H == SHADOW_MODEL_HEIGHT and W == SHADOW_MODEL_WIDTH:
+        return todos.model.forward(model, device, input_tensor)
+
+    # else, we need resize
+    input_tensor = F.interpolate(
+        input_tensor, size=(SHADOW_MODEL_HEIGHT, SHADOW_MODEL_WIDTH), mode="bilinear", align_corners=False
+    )
     output_tensor = todos.model.forward(model, device, input_tensor)
-    return output_tensor[:, :, 0:H, 0:W]
+    output_tensor = F.interpolate(output_tensor, size=(H, W), mode="bilinear", align_corners=False)
+    return output_tensor
 
 
 def image_client(name, input_files, output_dir):
@@ -38,19 +47,21 @@ def image_client(name, input_files, output_dir):
     image_filenames = todos.data.load_files(input_files)
     for filename in image_filenames:
         output_file = f"{output_dir}/{os.path.basename(filename)}"
-        context = cmd.color(filename, output_file)
+        context = cmd.deshadow(filename, output_file)
         redo.set_queue_task(context)
     print(f"Created {len(image_filenames)} tasks for {name}.")
 
 
 def image_server(name, host="localhost", port=6379):
     # load model
-    model, device = get_model()
+    device = todos.model.get_device()
+    model = deshadow.get_model()
+    model = model.to(device)
 
     def do_service(input_file, output_file, targ):
         print(f"  clean {input_file} ...")
         try:
-            input_tensor = todos.data.load_rgba_tensor(input_file)
+            input_tensor = todos.data.load_tensor(input_file)
             output_tensor = model_forward(model, device, input_tensor)
             todos.data.save_tensor(output_tensor, output_file)
             return True
@@ -66,7 +77,9 @@ def image_predict(input_files, output_dir):
     todos.data.mkdir(output_dir)
 
     # load model
-    model, device = get_model()
+    device = todos.model.get_device()
+    model = deshadow.get_model()
+    model = model.to(device)
 
     # load files
     image_filenames = todos.data.load_files(input_files)
@@ -76,12 +89,17 @@ def image_predict(input_files, output_dir):
     for filename in image_filenames:
         progress_bar.update(1)
 
-        # orig input
-        input_tensor = todos.data.load_rgba_tensor(filename)
-        input_tensor = data.color_sample(input_tensor, 0.01)
-        # pytorch recommand clone.detach instead of torch.Tensor(input_tensor)
-        orig_tensor = input_tensor.clone().detach()
+        input_tensor = todos.data.load_tensor(filename)
         predict_tensor = model_forward(model, device, input_tensor)
-        output_file = f"{output_dir}/{os.path.basename(filename)}"
+        # shadow_tensor = (predict_tensor >= 90.0/255.0).float()
 
-        todos.data.save_tensor([orig_tensor[:, 0:3, :, :], predict_tensor], output_file)
+        mask_tensor = 1.0 - predict_tensor * 0.5
+        shadow_tensor = torch.cat((input_tensor, mask_tensor.cpu()), dim=1)
+
+        # orig input
+        orig_tensor = todos.data.load_rgba_tensor(filename)
+
+        output_file = f"{output_dir}/{os.path.basename(filename)}"
+        output_file = output_file.replace(".jpg", ".png")
+
+        todos.data.save_tensor([orig_tensor, shadow_tensor], output_file)

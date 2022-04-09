@@ -53,8 +53,6 @@ data_path = [(os.path.join(FLAGS.root_path, 'ShadowImages', img_name + '.jpg'),
              os.path.join(FLAGS.root_path, 'ShadowMasks', img_name + '.png'))
             for img_name in sorted(img_list)]
 
-data_path = data_path[0: 100]
-
 
 def load_weight(model, path):
     """Load model."""

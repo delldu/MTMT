@@ -26,6 +26,8 @@ def test_all_case(net, image_list, num_classes=1, save_result=True, test_save_pa
     ber_mean = 0
     sum_ber_mean = 0.0
     iter = 0
+    net.eval()
+
     for (img_path, target_path) in tqdm(image_list):
         img_name = img_path.split('/')[-1]
         img = Image.open(img_path).convert('RGB')
@@ -36,7 +38,9 @@ def test_all_case(net, image_list, num_classes=1, save_result=True, test_save_pa
         # up_edge, up_shadow, up_subitizing, up_shadow_final = net(img_var) #subitizing
 
         # up_edge, up_sal, up_subitizing, up_sal_final
-        prediction = net(img_var)  # subiziting
+        with torch.no_grad():
+            prediction = net(img_var)  # subiziting
+
         # len(up_edge) -- 1
         # (Pdb) up_edge[0].size() -- torch.Size([1, 1, 416, 416])
         # (Pdb) len(up_shadow) -- 4
