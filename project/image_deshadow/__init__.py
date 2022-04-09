@@ -23,8 +23,6 @@ from . import shadow
 import pdb
 
 
-
-
 def model_forward(model, device, input_tensor):
     # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)

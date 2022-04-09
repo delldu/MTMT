@@ -212,7 +212,7 @@ class MergeLayer1(nn.Module):
         # len(fpn_shadow_feature) -- 4
 
         # return fpn_edge_score, fpn_edge_feature, fpn_shadow_score, fpn_shadow_feature, fc_score
-        return fpn_edge_feature, fpn_shadow_feature
+        return [fpn_edge_feature] + fpn_shadow_feature
 
 class MergeLayer1_FPN(nn.Module):
     def __init__(self, list_k):
@@ -295,21 +295,39 @@ class MergeLayer2(nn.Module):
 
         self.trans = nn.ModuleList(trans)
         self.up = nn.ModuleList(up)
-
         self.relu = nn.ReLU()
 
 
-    def forward(self, list_x, list_y, x_size):
+    def forward(self, fusion_list, x_size):
         # fpn_edge_feature, fpn_shadow_feature, x_size
-        up_score, tmp_feature = [], []
-        list_y = list_y[::-1] # Reverse
+        list_x = fusion_list[0]
+        # torch.jit.script does not support, So we must modify !!!
+        list_y = fusion_list[1:]
+        # list_y = list_y[::-1] # Reverse
+        list_y[0] = fusion_list[4]
+        list_y[1] = fusion_list[3]
+        list_y[2] = fusion_list[2]
+        list_y[3] = fusion_list[1]
 
-        for j, j_x in enumerate(list_y):
-            tmp = F.interpolate(self.trans[0][j](j_x), list_x.size()[2:], mode='bilinear', align_corners=True) + list_x
-            tmp_f = self.up[0][j](tmp)
-            up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode='bilinear', align_corners=True))
-            tmp_feature.append(tmp_f)
+        up_score, tmp_feature, tmp_list = [], [], []
 
+
+        # for j, j_x in enumerate(list_y):
+        #     tmp = F.interpolate(self.trans[0][j](j_x), list_x.size()[2:], mode='bilinear', align_corners=True) + list_x
+        #     tmp_f = self.up[0][j](tmp)
+        #     up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode='bilinear', align_corners=True))
+        #     tmp_feature.append(tmp_f)
+
+        for j, m in enumerate(self.trans[0]):
+            if j < len(list_y):
+                tmp = F.interpolate(m(list_y[j]), list_x.size()[2:], mode='bilinear', align_corners=True) + list_x
+                tmp_list.append(tmp)
+
+        for j, m in enumerate(self.up[0]):
+            if j < len(tmp_list):
+                tmp_f = m(tmp_list[j])
+                up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode='bilinear', align_corners=True))
+                tmp_feature.append(tmp_f)
 
         tmp_fea = tmp_feature[0]
         for i_fea in range(len(tmp_feature) - 1):
@@ -392,8 +410,12 @@ class TUN_bone(nn.Module):
 
         # fpn_edge_score, fpn_edge_feature, fpn_shadow_score, fpn_shadow_feature, fc_score = self.merge1(resnext_feature, x_size)
 
-        fpn_edge_feature, fpn_shadow_feature = self.merge1(resnext_feature, x_size)
-        fpn_final_score = self.merge2(fpn_edge_feature, fpn_shadow_feature, x_size)
+        # fpn_edge_feature, fpn_shadow_feature = self.merge1(resnext_feature, x_size)
+        fpn_fusion_feature = self.merge1(resnext_feature, x_size)
+
+        # fpn_final_score = self.merge2(fpn_edge_feature, fpn_shadow_feature, x_size)
+        fpn_final_score = self.merge2(fpn_fusion_feature, x_size)
+
         mask = torch.sigmoid(fpn_final_score[-1])
         return mask
 
