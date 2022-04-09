@@ -29,16 +29,20 @@ SHADOW_MODEL_WIDTH = 416
 
 def model_forward(model, device, input_tensor):
     H, W = input_tensor.size(2), input_tensor.size(3)
-    if H == SHADOW_MODEL_HEIGHT and W == SHADOW_MODEL_WIDTH:
-        return todos.model.forward(model, device, input_tensor)
+    input_tensor_new = input_tensor.clone()
+    input_tensor_new[0] = todos.data.normal_tensor(input_tensor_new[0], mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    return todos.model.forward(model, device, input_tensor_new)
 
-    # else, we need resize
-    input_tensor = F.interpolate(
-        input_tensor, size=(SHADOW_MODEL_HEIGHT, SHADOW_MODEL_WIDTH), mode="bilinear", align_corners=False
-    )
-    output_tensor = todos.model.forward(model, device, input_tensor)
-    output_tensor = F.interpolate(output_tensor, size=(H, W), mode="bilinear", align_corners=False)
-    return output_tensor
+    # if H == SHADOW_MODEL_HEIGHT and W == SHADOW_MODEL_WIDTH:
+    #     return todos.model.forward(model, device, input_tensor_new)
+
+    # # else, we need resize
+    # input_tensor_new = F.interpolate(
+    #     input_tensor_new, size=(SHADOW_MODEL_HEIGHT, SHADOW_MODEL_WIDTH), mode="bilinear", align_corners=False
+    # )
+    # output_tensor = todos.model.forward(model, device, input_tensor_new)
+    # output_tensor = F.interpolate(output_tensor, size=(H, W), mode="bilinear", align_corners=False)
+    # return output_tensor
 
 
 def image_client(name, input_files, output_dir):
