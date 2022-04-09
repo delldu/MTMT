@@ -4,11 +4,15 @@ from torch import nn
 from . import resnext_101_32x4d_
 from .config import resnext_101_32_path
 import torch._utils
-
+import pdb
 
 class ResNeXt101(nn.Module):
     def __init__(self, pretained=True):
         super(ResNeXt101, self).__init__()
+
+        pdb.set_trace()
+
+
         net = resnext_101_32x4d_.get_resnext_101_32x4d()
         if pretained:
             net.load_state_dict(torch.load(resnext_101_32_path))
@@ -18,6 +22,8 @@ class ResNeXt101(nn.Module):
         self.layer2 = net[5]
         self.layer3 = net[6]
         self.layer4 = net[7]
+        pdb.set_trace()
+
 
     def forward(self, x):
         layer0 = self.layer0(x)

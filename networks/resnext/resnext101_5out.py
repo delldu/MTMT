@@ -3,18 +3,26 @@ from torch import nn
 
 from . import resnext_101_32x4d_
 from .config import resnext_101_32_path
+import pdb
 
 class ResNeXt101(nn.Module):
     def __init__(self):
         super(ResNeXt101, self).__init__()
         net = resnext_101_32x4d_.get_resnext_101_32x4d()
-        net.load_state_dict(torch.load(resnext_101_32_path))
+        # xxxx8888 net.load_state_dict(torch.load(resnext_101_32_path))
         net = list(net.children())
         self.layer0 = nn.Sequential(*net[:3])
         self.layer1 = nn.Sequential(*net[3: 5])
         self.layer2 = net[5]
         self.layer3 = net[6]
         self.layer4 = net[7]
+        # (Pdb) self.layer0
+        # Sequential(
+        #   (0): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        #   (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        #   (2): ReLU()
+        # )
+
 
     def forward(self, x):
         layers = []
