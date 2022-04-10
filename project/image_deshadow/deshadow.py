@@ -22,7 +22,6 @@ from .resnext import ResNeXt101
 import pdb
 from typing import List
 
-
 class DeshadowModel(nn.Module):
     def __init__(self):
         super(DeshadowModel, self).__init__()
@@ -34,6 +33,7 @@ class DeshadowModel(nn.Module):
 
     def forward(self, x):
         x_size = x.size()[2:]
+
         resnext_feature = self.base(x)
         resnext_feature = self.convert(resnext_feature)
         # fpn_edge_feature, fpn_shadow_feature = self.merge1(resnext_feature, x_size)
@@ -126,7 +126,6 @@ class MergeLayer1(nn.Module):
 
         trans.append(nn.Sequential(nn.Conv2d(64, 32, 1, 1, bias=False), nn.ReLU(inplace=True)))
 
-        # self.shadow_score = nn.Conv2d(list_k[0][2], 1, 3, 1, 1)
         self.shadow_score = nn.Sequential(
             nn.Conv2d(list_k[1][2], list_k[1][2] // 4, 3, 1, 1),
             nn.BatchNorm2d(list_k[1][2] // 4),
@@ -142,7 +141,6 @@ class MergeLayer1(nn.Module):
         #   (4): Conv2d(16, 1, kernel_size=(1, 1), stride=(1, 1))
         # )
 
-        # self.edge_score = nn.Conv2d(list_k[0][2], 1, 3, 1, 1)
         self.edge_score = nn.Sequential(
             nn.Conv2d(list_k[0][2], list_k[0][2] // 4, 3, 1, 1),
             nn.BatchNorm2d(list_k[0][2] // 4),
@@ -154,7 +152,6 @@ class MergeLayer1(nn.Module):
         self.up = nn.ModuleList(up)
         self.relu = nn.ReLU()
         self.trans = nn.ModuleList(trans)
-        # (Pdb) self.trans
         # ModuleList(
         #   (0): Sequential(
         #     (0): Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1), bias=False)
@@ -177,10 +174,7 @@ class MergeLayer1(nn.Module):
         fpn_shadow_score, fpn_shadow_feature, U_tmp = [], [], []
 
         # layer5
-        num_f = len(list_x)
-        tmp = self.up[num_f - 1](list_x[num_f - 1])  # [1, 64, 13, 13]
-
-        # tmp = self.up[4](list_x[4])  # [1, 64, 13, 13]
+        tmp = self.up[4](list_x[4])  # [1, 64, 13, 13]
         fpn_shadow_feature.append(tmp)
         U_tmp.append(tmp)
         # self.shadow_score(tmp).size() -- [1, 1, 13, 13]
@@ -225,6 +219,7 @@ class MergeLayer1(nn.Module):
 
         # fpn_edge_score.size() -- [1, 1, 416, 416]
         # fpn_edge_feature.size() -- [1, 32, 208, 208]
+
         # len(fpn_shadow_score) -- 4
         # len(fpn_shadow_feature) -- 4
 
@@ -295,28 +290,21 @@ class MergeLayer2(nn.Module):
         #     tmp_feature.append(tmp_f)
 
         for j, m in enumerate(self.trans[0]):
-            if j < len(list_y):
-                tmp = F.interpolate(m(list_y[j]), list_x.size()[2:], mode="bilinear", align_corners=True) + list_x
-                tmp_list.append(tmp)
+            tmp = F.interpolate(m(list_y[j]), list_x.size()[2:], mode="bilinear", align_corners=True) + list_x
+            tmp_list.append(tmp)
 
         for j, m in enumerate(self.up[0]):
-            if j < len(tmp_list):
-                tmp_f = m(tmp_list[j])
-                up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
-                tmp_feature.append(tmp_f)
+            tmp_f = m(tmp_list[j])
+            up_score.append(F.interpolate(self.sub_score(tmp_f), x_size, mode="bilinear", align_corners=True))
+            tmp_feature.append(tmp_f)
 
         tmp_fea = tmp_feature[0]
         for i_fea in range(len(tmp_feature) - 1):
             tmp_fea = self.relu(
-                torch.add(
-                    tmp_fea,
-                    F.interpolate(
-                        (tmp_feature[i_fea + 1]), tmp_feature[0].size()[2:], mode="bilinear", align_corners=True
-                    ),
-                )
+                tmp_fea + F.interpolate(
+                    tmp_feature[i_fea + 1], tmp_feature[0].size()[2:], mode="bilinear", align_corners=True)
             )
         up_score.append(F.interpolate(self.sub_score(tmp_fea), x_size, mode="bilinear", align_corners=True))
-        # up_score.append(F.interpolate(self.final_score(tmp_fea), x_size, mode='bilinear', align_corners=True))
 
         return up_score
 
@@ -352,10 +340,10 @@ def get_model():
     load_weight(model, checkpoint)
     model.eval()
 
-    # model = torch.jit.script(model)
+    model = torch.jit.script(model)
 
-    # todos.data.mkdir("output")
-    # if not os.path.exists("output/image_deshadow.torch"):
-    #     model.save("output/image_deshadow.torch")
+    todos.data.mkdir("output")
+    if not os.path.exists("output/image_deshadow.torch"):
+        model.save("output/image_deshadow.torch")
 
     return model

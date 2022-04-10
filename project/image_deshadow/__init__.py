@@ -23,16 +23,16 @@ import todos
 from . import deshadow
 import pdb
 
-SHADOW_MODEL_HEIGHT = 416
-SHADOW_MODEL_WIDTH = 416
-
 
 def model_forward(model, device, input_tensor):
     H, W = input_tensor.size(2), input_tensor.size(3)
     input_tensor_new = input_tensor.clone()
-    input_tensor_new[0] = todos.data.normal_tensor(input_tensor_new[0], mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    input_tensor_new[0] = todos.data.normal_tensor(input_tensor_new[0], 
+        mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
     return todos.model.forward(model, device, input_tensor_new)
 
+    # SHADOW_MODEL_HEIGHT = 416
+    # SHADOW_MODEL_WIDTH = 416
     # if H == SHADOW_MODEL_HEIGHT and W == SHADOW_MODEL_WIDTH:
     #     return todos.model.forward(model, device, input_tensor_new)
 
@@ -63,7 +63,7 @@ def image_server(name, host="localhost", port=6379):
     model = model.to(device)
 
     def do_service(input_file, output_file, targ):
-        print(f"  clean {input_file} ...")
+        print(f"  deshadow {input_file} ...")
         try:
             input_tensor = todos.data.load_tensor(input_file)
             output_tensor = model_forward(model, device, input_tensor)
