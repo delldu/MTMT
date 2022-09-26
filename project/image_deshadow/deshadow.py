@@ -22,6 +22,7 @@ from .resnext import ResNeXt101
 import pdb
 from typing import List
 
+
 class DeshadowModel(nn.Module):
     def __init__(self):
         super(DeshadowModel, self).__init__()
@@ -32,11 +33,11 @@ class DeshadowModel(nn.Module):
         self.merge2 = MergeLayer2()
 
     def forward(self, x):
-        # normalize x 
+        # normalize x
         MEAN = [0.485, 0.456, 0.406]
         STD = [0.229, 0.224, 0.225]
         for i in range(3):
-            x[:, i, :, :] = (x[:, i, :, :] - MEAN[i])/STD[i]
+            x[:, i, :, :] = (x[:, i, :, :] - MEAN[i]) / STD[i]
 
         x_size = x.size()[2:]
         resnext_feature = self.base(x)
@@ -306,8 +307,8 @@ class MergeLayer2(nn.Module):
         tmp_fea = tmp_feature[0]
         for i_fea in range(len(tmp_feature) - 1):
             tmp_fea = self.relu(
-                tmp_fea + F.interpolate(
-                    tmp_feature[i_fea + 1], tmp_feature[0].size()[2:], mode="bilinear", align_corners=True)
+                tmp_fea
+                + F.interpolate(tmp_feature[i_fea + 1], tmp_feature[0].size()[2:], mode="bilinear", align_corners=True)
             )
         up_score.append(F.interpolate(self.sub_score(tmp_fea), x_size, mode="bilinear", align_corners=True))
 

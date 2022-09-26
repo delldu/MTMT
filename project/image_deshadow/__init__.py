@@ -23,6 +23,7 @@ import pdb
 
 DESHADOW_ZEROPAD_TIMES = 2
 
+
 def model_forward(model, device, input_tensor, multi_times):
     # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
@@ -35,6 +36,7 @@ def model_forward(model, device, input_tensor, multi_times):
     torch.cuda.synchronize()
 
     return output_tensor[:, :, 0:H, 0:W]
+
 
 def image_client(name, input_files, output_dir):
     redo = redos.Redos(name)
