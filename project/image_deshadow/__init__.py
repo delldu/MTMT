@@ -12,10 +12,8 @@
 __version__ = "1.0.0"
 
 import os
-import time
 from tqdm import tqdm
 import torch
-import torch.nn.functional as F
 
 import redos
 import todos
@@ -23,27 +21,20 @@ import todos
 from . import deshadow
 import pdb
 
+DESHADOW_ZEROPAD_TIMES = 2
 
-def model_forward(model, device, input_tensor):
+def model_forward(model, device, input_tensor, multi_times):
+    # zeropad for model
     H, W = input_tensor.size(2), input_tensor.size(3)
-    input_tensor_new = input_tensor.clone()
-    input_tensor_new[0] = todos.data.normal_tensor(input_tensor_new[0], 
-        mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
-    return todos.model.forward(model, device, input_tensor_new)
+    if H % multi_times != 0 or W % multi_times != 0:
+        input_tensor = todos.data.zeropad_tensor(input_tensor, times=multi_times)
 
-    # SHADOW_MODEL_HEIGHT = 416
-    # SHADOW_MODEL_WIDTH = 416
-    # if H == SHADOW_MODEL_HEIGHT and W == SHADOW_MODEL_WIDTH:
-    #     return todos.model.forward(model, device, input_tensor_new)
+    torch.cuda.synchronize()
+    with torch.jit.optimized_execution(False):
+        output_tensor = todos.model.forward(model, device, input_tensor)
+    torch.cuda.synchronize()
 
-    # # else, we need resize
-    # input_tensor_new = F.interpolate(
-    #     input_tensor_new, size=(SHADOW_MODEL_HEIGHT, SHADOW_MODEL_WIDTH), mode="bilinear", align_corners=False
-    # )
-    # output_tensor = todos.model.forward(model, device, input_tensor_new)
-    # output_tensor = F.interpolate(output_tensor, size=(H, W), mode="bilinear", align_corners=False)
-    # return output_tensor
-
+    return output_tensor[:, :, 0:H, 0:W]
 
 def image_client(name, input_files, output_dir):
     redo = redos.Redos(name)
@@ -61,12 +52,13 @@ def image_server(name, host="localhost", port=6379):
     device = todos.model.get_device()
     model = deshadow.get_model()
     model = model.to(device)
+    print(f"Running on {device} ...")
 
     def do_service(input_file, output_file, targ):
         print(f"  deshadow {input_file} ...")
         try:
             input_tensor = todos.data.load_tensor(input_file)
-            output_tensor = model_forward(model, device, input_tensor)
+            output_tensor = model_forward(model, device, input_tensor, DESHADOW_ZEROPAD_TIMES)
             todos.data.save_tensor(output_tensor, output_file)
             return True
         except Exception as e:
@@ -84,6 +76,7 @@ def image_predict(input_files, output_dir):
     device = todos.model.get_device()
     model = deshadow.get_model()
     model = model.to(device)
+    print(f"Running on {device} ...")
 
     # load files
     image_filenames = todos.data.load_files(input_files)
@@ -94,7 +87,7 @@ def image_predict(input_files, output_dir):
         progress_bar.update(1)
 
         input_tensor = todos.data.load_tensor(filename)
-        predict_tensor = model_forward(model, device, input_tensor)
+        predict_tensor = model_forward(model, device, input_tensor, DESHADOW_ZEROPAD_TIMES)
         # shadow_tensor = (predict_tensor >= 90.0/255.0).float()
 
         mask_tensor = 1.0 - predict_tensor * 0.5

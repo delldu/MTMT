@@ -32,8 +32,13 @@ class DeshadowModel(nn.Module):
         self.merge2 = MergeLayer2()
 
     def forward(self, x):
-        x_size = x.size()[2:]
+        # normalize x 
+        MEAN = [0.485, 0.456, 0.406]
+        STD = [0.229, 0.224, 0.225]
+        for i in range(3):
+            x[:, i, :, :] = (x[:, i, :, :] - MEAN[i])/STD[i]
 
+        x_size = x.size()[2:]
         resnext_feature = self.base(x)
         resnext_feature = self.convert(resnext_feature)
         # fpn_edge_feature, fpn_shadow_feature = self.merge1(resnext_feature, x_size)
