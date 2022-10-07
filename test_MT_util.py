@@ -40,6 +40,7 @@ def test_all_case(net, image_list, num_classes=1, save_result=True, test_save_pa
         # up_edge, up_sal, up_subitizing, up_sal_final
         with torch.no_grad():
             prediction = net(img_var)  # subiziting
+        pdb.set_trace()
 
         # len(up_edge) -- 1
         # (Pdb) up_edge[0].size() -- torch.Size([1, 1, 416, 416])
