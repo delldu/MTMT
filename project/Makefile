@@ -13,7 +13,7 @@ install:
 	python setup.py install
 
 uninstall:
-	pip uninstall image_deshadow
+	pip uninstall image_shadow
 
 clean:
-	rm -rf build dist image_deshadow.egg-info __pycache__
+	rm -rf build dist image_shadow.egg-info __pycache__

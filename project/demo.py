@@ -1,6 +1,6 @@
-import image_deshadow
+import image_shadow
 
-# image_deshadow.image_client("TAI", "images/*.png", "output")
-# image_deshadow.image_server("TAI")
+# image_shadow.image_client("TAI", "images/*.png", "output")
+# image_shadow.image_server("TAI")
 
-image_deshadow.image_predict("images/*.jpg", "output")
+image_shadow.image_predict("images/*.jpg", "output")

@@ -15,16 +15,16 @@ with open("README.md", "r") as file:
     long_description = file.read()
 
 setup(
-    name="image_deshadow",
+    name="image_shadow",
     version="1.0.0",
     author="Dell Du",
     author_email="18588220928@163.com",
-    description="image deshadow package",
+    description="image shadow package",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/delldu/MTMT.git",
-    packages=["image_deshadow"],
-    package_data={"image_deshadow": ["models/image_deshadow.pth"]},
+    packages=["image_shadow"],
+    package_data={"image_shadow": ["models/image_shadow.pth"]},
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",

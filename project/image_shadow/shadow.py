@@ -23,9 +23,9 @@ import pdb
 from typing import List
 
 
-class DeshadowModel(nn.Module):
+class ShadowModel(nn.Module):
     def __init__(self):
-        super(DeshadowModel, self).__init__()
+        super(ShadowModel, self).__init__()
 
         self.convert = ConvertLayer()
         self.base = ResNeXt101()
@@ -313,43 +313,3 @@ class MergeLayer2(nn.Module):
         up_score.append(F.interpolate(self.sub_score(tmp_fea), x_size, mode="bilinear", align_corners=True))
 
         return up_score
-
-
-def load_weight(model, path):
-    """Load model."""
-
-    if not os.path.exists(path):
-        raise IOError(f"Model checkpoint '{path}' doesn't exist.")
-
-    # state_dict = torch.load(path, map_location=lambda storage, loc: storage)
-    state_dict = torch.load(path, map_location=torch.device("cpu"))
-
-    target_state_dict = model.state_dict()
-    for n in target_state_dict.keys():
-        n2 = n.replace("seqlist", "")
-        if n2 in state_dict.keys():
-            p2 = state_dict[n2]
-            target_state_dict[n].copy_(p2)
-        else:
-            raise KeyError(n)
-
-
-def get_model():
-    """Create model."""
-
-    model_path = "models/image_deshadow.pth"
-    cdir = os.path.dirname(__file__)
-    checkpoint = model_path if cdir == "" else cdir + "/" + model_path
-
-    model = DeshadowModel()
-
-    load_weight(model, checkpoint)
-    model.eval()
-
-    model = torch.jit.script(model)
-
-    todos.data.mkdir("output")
-    if not os.path.exists("output/image_deshadow.torch"):
-        model.save("output/image_deshadow.torch")
-
-    return model
