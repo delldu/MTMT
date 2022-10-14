@@ -124,11 +124,7 @@ def image_predict(input_files, output_dir):
         progress_bar.update(1)
 
         input_tensor = todos.data.load_tensor(filename)
-        predict_tensor = model_forward(model, device, input_tensor)
-        # shadow_tensor = (predict_tensor >= 90.0/255.0).float()
-
-        mask_tensor = 1.0 - predict_tensor * 0.5
-        shadow_tensor = torch.cat((input_tensor, mask_tensor.cpu()), dim=1)
+        output_tensor = model_forward(model, device, input_tensor)
 
         # orig input
         orig_tensor = todos.data.load_rgba_tensor(filename)
@@ -136,4 +132,4 @@ def image_predict(input_files, output_dir):
         output_file = f"{output_dir}/{os.path.basename(filename)}"
         output_file = output_file.replace(".jpg", ".png")
 
-        todos.data.save_tensor([orig_tensor, shadow_tensor], output_file)
+        todos.data.save_tensor([orig_tensor, output_tensor], output_file)

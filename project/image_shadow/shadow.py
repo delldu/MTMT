@@ -33,6 +33,8 @@ class ShadowModel(nn.Module):
         self.merge2 = MergeLayer2()
 
     def forward(self, x):
+        input_tensor = x.clone()
+
         # normalize x
         MEAN = [0.485, 0.456, 0.406]
         STD = [0.229, 0.224, 0.225]
@@ -48,7 +50,10 @@ class ShadowModel(nn.Module):
         fpn_final_score = self.merge2(fusion_feature, x_size)
 
         mask = torch.sigmoid(fpn_final_score[-1])
-        return (mask >= 90 / 255.0).float()
+        mask = (mask >= 90.0 / 255.0).float()
+
+        mask_tensor = 1.0 - mask * 0.5  # shadow mask is 0.5, others is 1.0
+        return torch.cat((input_tensor, mask_tensor), dim=1)
 
 
 class ConvertLayer(nn.Module):
