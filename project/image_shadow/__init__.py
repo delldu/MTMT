@@ -39,7 +39,7 @@ def load_weight(model, path):
             raise KeyError(n)
 
 
-def get_model():
+def get_shadow_model():
     """Create model."""
 
     model_path = "models/image_shadow.pth"
@@ -47,17 +47,17 @@ def get_model():
     checkpoint = model_path if cdir == "" else cdir + "/" + model_path
 
     model = shadow.ShadowModel()
-
     load_weight(model, checkpoint)
+    device = todos.model.get_device()
+    model = model.to(device)
     model.eval()
 
     model = torch.jit.script(model)
-
     todos.data.mkdir("output")
     if not os.path.exists("output/image_shadow.torch"):
         model.save("output/image_shadow.torch")
 
-    return model
+    return model, device
 
 
 def image_predict(input_files, output_dir):
@@ -65,11 +65,9 @@ def image_predict(input_files, output_dir):
     todos.data.mkdir(output_dir)
 
     # load model
-    device = todos.model.get_device()
-    model = get_model()
-    model = model.to(device)
-    print(f"Running on {device} ...")
+    model, device = get_shadow_model()
 
+    print(f"Running on {device} ...")
     # load files
     image_filenames = todos.data.load_files(input_files)
 
