@@ -39,6 +39,27 @@ def load_weight(model, path):
             raise KeyError(n)
 
 
+def get_tvm_model():
+    """
+    TVM model base on torch.jit.trace
+    """
+
+    model_path = "models/image_shadow.pth"
+    cdir = os.path.dirname(__file__)
+    checkpoint = model_path if cdir == "" else cdir + "/" + model_path
+
+    model = shadow.ShadowModel()
+    load_weight(model, checkpoint)
+
+
+    device = todos.model.get_device()
+    model = model.to(device)
+    model.eval()
+    print(f"Running tvm model model on {device} ...")
+
+    return model, device
+
+
 def get_shadow_model():
     """Create model."""
 
@@ -48,6 +69,8 @@ def get_shadow_model():
 
     model = shadow.ShadowModel()
     load_weight(model, checkpoint)
+    model = todos.model.ResizePadModel(model)
+
     device = todos.model.get_device()
     model = model.to(device)
     model.eval()
