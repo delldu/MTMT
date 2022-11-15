@@ -25,9 +25,9 @@ from typing import List
 class ShadowModel(nn.Module):
     def __init__(self):
         super(ShadowModel, self).__init__()
-        # Define max GPU/CPU memory -- 2G
+        # Define max GPU/CPU memory -- 3G, 240ms
         self.MAX_H = 1024
-        self.MAX_W = 1024
+        self.MAX_W = 2048
         self.MAX_TIMES = 4
 
         self.convert = ConvertLayer()
